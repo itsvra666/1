@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧單字複習系統</title>
+    <!-- Tailwind CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Tesseract.js CDN -->
+    <script src='https://unpkg.com/tesseract.js@4.0.0/dist/tesseract.min.js'></script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif; /* Recommended for Traditional Chinese */
+            background-color: #F9FAFB; /* Light Gray */
+            color: #333;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e0; /* light gray blue */
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0; /* darker gray blue */
+        }
+
+        .container-box {
+            background-color: white;
+            border-radius: 1rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+            padding: 1.5rem;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes slideOutLeft {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(-20px); }
+        }
+
+        .page-transition-enter-active {
+            animation: fadeIn 0.5s ease-out;
+        }
+        .page-transition-leave-active {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        /* Card specific styles */
+        .library-card, .word-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .library-card:hover, .word-card:hover {
+            transform: translateY(-5px) scale(1.01);
+            box-shadow: 0 15px 20px -5px rgba(0, 0, 0, 0.15), 0 6px 8px -3px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Button styles */
+        .btn-primary {
+            @apply bg-blue-800 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 ease-in-out transform hover:scale-105 hover:bg-blue-900;
+        }
+        .btn-secondary {
+            @apply bg-gray-200 text-gray-800 font-bold py-2 px-5 rounded-lg shadow-sm transition duration-200 ease-in-out transform hover:scale-105 hover:bg-gray-300;
+        }
+        .btn-accent {
+            @apply bg-teal-500 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 ease-in-out transform hover:scale-105 hover:bg-teal-600;
+        }
+        .btn-danger {
+            @apply bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition duration-200 ease-in-out transform hover:scale-105 hover:bg-red-700;
+        }
+        .btn-icon {
+            @apply p-2 rounded-full hover:bg-gray-200 transition duration-150 ease-in-out;
+        }
+
+        /* Flashcard Flip Animation */
+        .flip-container {
+            perspective: 1000px;
+            width: 100%;
+            height: 250px;
+        }
+        .flipper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .flip-container.flipped .flipper {
+            transform: rotateY(180deg);
+        }
+        .front, .back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            text-align: center;
+            background-color: white;
+        }
+        .back {
+            transform: rotateY(180deg);
+        }
+
+        /* Overlay styles for modals/OCR */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            transform: translateY(-20px);
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .overlay.active .modal-content {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+    </style>
+    <!-- Google Fonts for Noto Sans TC (Traditional Chinese) -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen flex flex-col items-center p-6">
+
+    <div id="app" class="w-full max-w-4xl min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-blue-800 tracking-tight">智慧單字複習系統</h1>
+        </header>
+
+        <!-- Main Content Area - Dynamic Pages -->
+        <main id="content-area" class="flex-grow">
+            <!-- Pages will be dynamically loaded here -->
+        </main>
+
+        <!-- Fixed Action Buttons at the bottom for Home Page -->
+        <div id="home-action-buttons" class="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-200 shadow-lg flex justify-around sm:justify-center space-x-4 z-50 transition-opacity duration-300 ease-in-out">
+            <button class="btn-primary flex items-center space-x-2" onclick="showAddLibraryModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span>新增單字庫</span>
+            </button>
+            <button class="btn-primary flex items-center space-x-2" onclick="showScanWordsModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span>掃描單字</span>
+            </button>
+            <button class="btn-primary flex items-center space-x-2" onclick="showMistakeCollection()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>錯題集</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modals (Add Library, Add Word, Edit Word, OCR Scan, Review Modes) -->
+
+    <!-- Add New Library Modal -->
+    <div id="addLibraryModal" class="overlay">
+        <div class="modal-content w-full max-w-md">
+            <h3 class="text-2xl font-bold text-blue-800 mb-6 text-center">新增單字庫</h3>
+            <div class="mb-4">
+                <label for="newLibraryName" class="block text-gray-700 text-sm font-bold mb-2">單字庫名稱:</label>
+                <input type="text" id="newLibraryName" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="例如: 旅遊英語, 多益核心">
+            </div>
+            <div class="flex justify-end space-x-4">
+                <button class="btn-secondary" onclick="closeModal('addLibraryModal')">取消</button>
+                <button class="btn-primary" onclick="addLibrary()">新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Word Modal -->
+    <div id="wordModal" class="overlay">
+        <div class="modal-content w-full max-w-md">
+            <h3 id="wordModalTitle" class="text-2xl font-bold text-blue-800 mb-6 text-center">新增單字</h3>
+            <form id="wordForm" onsubmit="return false;">
+                <input type="hidden" id="editWordId">
+                <div class="mb-4">
+                    <label for="wordEnglish" class="block text-gray-700 text-sm font-bold mb-2">英文:</label>
+                    <input type="text" id="wordEnglish" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="English Word" required>
+                </div>
+                <div class="mb-4">
+                    <label for="wordChinese" class="block text-gray-700 text-sm font-bold mb-2">中文意思:</label>
+                    <input type="text" id="wordChinese" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="中文意思" required>
+                </div>
+                <div class="mb-4">
+                    <label for="wordNote" class="block text-gray-700 text-sm font-bold mb-2">例句/備註 (選填):</label>
+                    <textarea id="wordNote" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" rows="3" placeholder="例句或任何備註"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">熟悉度:</label>
+                    <div class="flex justify-around mt-2">
+                        <button type="button" class="flex-1 py-2 rounded-l-lg bg-red-200 text-red-800 font-semibold hover:bg-red-300 transition duration-150" onclick="setFamiliarity('unfamiliar')">
+                            <span class="inline-block w-4 h-4 rounded-full bg-red-600 mr-2"></span>不熟悉
+                        </button>
+                        <button type="button" class="flex-1 py-2 bg-orange-200 text-orange-800 font-semibold hover:bg-orange-300 transition duration-150" onclick="setFamiliarity('half-familiar')">
+                            <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>半熟悉
+                        </button>
+                        <button type="button" class="flex-1 py-2 rounded-r-lg bg-green-200 text-green-800 font-semibold hover:bg-green-300 transition duration-150" onclick="setFamiliarity('familiar')">
+                            <span class="inline-block w-4 h-4 rounded-full bg-green-600 mr-2"></span>熟悉
+                        </button>
+                    </div>
+                    <input type="hidden" id="wordFamiliarity" value="unfamiliar">
+                </div>
+                <div class="flex justify-end space-x-4 mt-6">
+                    <button type="button" class="btn-secondary" onclick="closeModal('wordModal')">取消</button>
+                    <button type="submit" class="btn-primary" onclick="saveWord()">儲存單字</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- OCR Scan Words Modal -->
+    <div id="scanWordsModal" class="overlay">
+        <div class="modal-content w-full max-w-3xl">
+            <h3 class="text-2xl font-bold text-blue-800 mb-6 text-center">掃描單字</h3>
+            <div class="flex flex-col md:flex-row gap-6 mb-6">
+                <div class="flex-1">
+                    <video id="videoElement" class="w-full h-64 bg-gray-300 rounded-lg object-cover" autoplay playsinline></video>
+                    <canvas id="canvasElement" class="hidden"></canvas>
+                    <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="processImageFromFile(event)">
+                    <div class="mt-4 flex justify-center space-x-4">
+                        <button class="btn-secondary flex items-center space-x-2" onclick="document.getElementById('imageInput').click()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-4 3 3 5-5V15z" clip-rule="evenodd" />
+                            </svg>
+                            <span>選擇圖片</span>
+                        </button>
+                        <button class="btn-primary flex items-center space-x-2" onclick="captureAndProcessImage()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-4 3 3 5-5V15z" clip-rule="evenodd" />
+                            </svg>
+                            <span>拍攝並識別</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1">
+                    <h4 class="text-xl font-semibold mb-2 text-blue-700">識別結果 (臨時單字庫)</h4>
+                    <p id="ocrStatus" class="text-gray-600 mb-2"></p>
+                    <div id="temporaryWordList" class="max-h-64 overflow-y-auto border rounded-lg p-2 bg-gray-50">
+                        <p class="text-gray-500 text-center" id="noOcrWordsMessage">尚未掃描單字。</p>
+                        <!-- OCR words will be appended here -->
+                    </div>
+                    <div class="mt-4 flex justify-end space-x-4">
+                        <button class="btn-secondary" onclick="clearTemporaryWords()">清空臨時庫</button>
+                        <button class="btn-accent" onclick="showImportOcrWordsModal()">匯入選取單字</button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end mt-4">
+                <button class="btn-secondary" onclick="closeScanWordsModal()">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import OCR Words Modal -->
+    <div id="importOcrWordsModal" class="overlay">
+        <div class="modal-content w-full max-w-md">
+            <h3 class="text-2xl font-bold text-blue-800 mb-6 text-center">匯入掃描單字</h3>
+            <div class="mb-4">
+                <label for="selectTargetLibrary" class="block text-gray-700 text-sm font-bold mb-2">選擇目標單字庫:</label>
+                <select id="selectTargetLibrary" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <!-- Options will be dynamically loaded -->
+                </select>
+            </div>
+            <div id="ocrImportWarning" class="text-red-600 text-sm mb-4 hidden">單字已存在！</div>
+            <div class="flex justify-end space-x-4">
+                <button class="btn-secondary" onclick="closeModal('importOcrWordsModal')">取消</button>
+                <button class="btn-primary" onclick="importSelectedOcrWords()">匯入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flashcard Review Modal -->
+    <div id="flashcardReviewModal" class="overlay">
+        <div class="modal-content w-full max-w-lg">
+            <h3 class="text-2xl font-bold text-blue-800 mb-6 text-center">單字卡複習</h3>
+            <div id="flashcardContainer" class="flip-container mb-6" onclick="flipCard()">
+                <div class="flipper">
+                    <div class="front bg-gradient-to-br from-blue-100 to-blue-200">
+                        <p id="flashcardEnglish" class="text-5xl font-extrabold text-blue-800"></p>
+                    </div>
+                    <div class="back bg-gradient-to-br from-green-100 to-green-200 text-green-800 flex flex-col justify-center items-center">
+                        <p id="flashcardChinese" class="text-3xl font-bold mb-4"></p>
+                        <p id="flashcardNote" class="text-xl italic text-gray-700"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-around mb-6">
+                <button class="flex-1 py-3 mx-1 rounded-lg bg-red-200 text-red-800 font-semibold hover:bg-red-300 transition duration-150" onclick="setReviewFamiliarity('unfamiliar')">
+                    <span class="inline-block w-4 h-4 rounded-full bg-red-600 mr-2"></span>不熟悉
+                </button>
+                <button class="flex-1 py-3 mx-1 bg-orange-200 text-orange-800 font-semibold hover:bg-orange-300 transition duration-150" onclick="setReviewFamiliarity('half-familiar')">
+                    <span class="inline-block w-4 h-4 rounded-full bg-orange-500 mr-2"></span>半熟悉
+                </button>
+                <button class="flex-1 py-3 mx-1 rounded-lg bg-green-200 text-green-800 font-semibold hover:bg-green-300 transition duration-150" onclick="setReviewFamiliarity('familiar')">
+                    <span class="inline-block w-4 h-4 rounded-full bg-green-600 mr-2"></span>熟悉
+                </button>
+            </div>
+            <div class="flex justify-center">
+                <button class="btn-secondary" onclick="closeModal('flashcardReviewModal')">結束複習</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Spelling/Fill-in-the-Blank Review Modal -->
+    <div id="quizReviewModal" class="overlay">
+        <div class="modal-content w-full max-w-lg">
+            <h3 class="text-2xl font-bold text-blue-800 mb-6 text-center">拼寫與填空複習</h3>
+            <div id="quizContent">
+                <p id="quizProgress" class="text-gray-600 text-center mb-4 text-lg"></p>
+                <div class="container-box p-6 mb-6">
+                    <p id="quizQuestion" class="text-3xl font-bold text-blue-700 text-center mb-4"></p>
+                    <p id="quizHint" class="text-xl text-gray-600 text-center mb-6 italic"></p>
+
+                    <input type="text" id="quizAnswerInput" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 text-xl leading-tight focus:outline-none focus:shadow-outline text-center" placeholder="輸入你的答案..." onkeyup="checkEnterForQuiz(event)">
+                    <p id="quizFeedback" class="text-center mt-4 text-lg font-semibold"></p>
+                </div>
+                <div class="flex justify-center space-x-4 mt-6">
+                    <button class="btn-primary" onclick="submitQuizAnswer()">提交答案</button>
+                    <button class="btn-secondary" onclick="nextQuizQuestion()" id="nextQuestionBtn" style="display: none;">下一題</button>
+                </div>
+            </div>
+            <div id="quizResult" class="hidden text-center">
+                <h4 class="text-3xl font-bold text-blue-800 mb-4">複習結束！</h4>
+                <p class="text-2xl mb-6">你的分數: <span id="finalScore" class="font-extrabold text-teal-600"></span></p>
+                <button class="btn-primary" onclick="closeModal('quizReviewModal')">返回</button>
+                <button class="btn-accent ml-4" onclick="showMistakeCollection()">查看錯題集</button>
+            </div>
+            <div class="flex justify-end mt-6">
+                <button class="btn-secondary" onclick="confirmEndQuiz()">結束複習</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Core Data Structure ---
+        let appData = {
+            libraries: [], // Each library: { id, name, words: [] }
+            temporaryOcrWords: [], // { id, english, chinese, libraryId(temp) }
+            mistakeCollection: [], // { wordId, libraryId, timestamp }
+            currentLibraryId: null,
+            currentReviewWords: [], // Words for current review session
+            currentReviewIndex: 0,
+            quizScore: 0,
+            quizTotalQuestions: 0,
+            cameraStream: null, // To manage camera stream for OCR
+        };
+
+        const FAMILIARITY_LEVELS = {
+            UNFAMILIAR: 'unfamiliar',
+            HALF_FAMILIAR: 'half-familiar',
+            FAMILIAR: 'familiar'
+        };
+
+        const FAMILIARITY_COLORS = {
+            [FAMILIARITY_LEVELS.UNFAMILIAR]: 'bg-red-500',
+            [FAMILIARITY_LEVELS.HALF_FAMILIAR]: 'bg-orange-400',
+            [FAMILIARITY_LEVELS.FAMILIAR]: 'bg-green-500'
+        };
+
+        // --- Utility Functions ---
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
+        function saveData() {
+            localStorage.setItem('vocabularyAppData', JSON.stringify(appData));
+        }
+
+        function loadData() {
+            const data = localStorage.getItem('vocabularyAppData');
+            if (data) {
+                appData = JSON.parse(data);
+                // Ensure mistakeCollection is an array
+                if (!Array.isArray(appData.mistakeCollection)) {
+                    appData.mistakeCollection = [];
+                }
+            }
+        }
+
+        function showPage(pageId, libraryId = null) {
+            const contentArea = document.getElementById('content-area');
+            contentArea.innerHTML = ''; // Clear previous content
+            document.getElementById('home-action-buttons').style.display = 'none'; // Hide home buttons by default
+
+            // Simple page transition
+            contentArea.classList.remove('page-transition-enter-active');
+            void contentArea.offsetWidth; // Trigger reflow
+            contentArea.classList.add('page-transition-enter-active');
+
+            switch (pageId) {
+                case 'home':
+                    renderHomePage();
+                    document.getElementById('home-action-buttons').style.display = 'flex';
+                    break;
+                case 'library':
+                    appData.currentLibraryId = libraryId;
+                    renderLibraryPage(libraryId);
+                    break;
+                case 'mistakeCollection':
+                    renderMistakeCollectionPage();
+                    break;
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            // Specific cleanup for OCR modal
+            if (modalId === 'scanWordsModal') {
+                stopCamera();
+                appData.temporaryOcrWords = []; // Clear temp words on close
+                document.getElementById('temporaryWordList').innerHTML = '<p class="text-gray-500 text-center" id="noOcrWordsMessage">尚未掃描單字。</p>';
+                document.getElementById('ocrStatus').textContent = '';
+            }
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function clearForm(formId) {
+            const form = document.getElementById(formId);
+            if (form) {
+                form.reset();
+                document.getElementById('editWordId').value = '';
+                document.getElementById('wordFamiliarity').value = FAMILIARITY_LEVELS.UNFAMILIAR;
+            }
+        }
+
+        // --- Page Renderers ---
+
+        function renderHomePage() {
+            const contentArea = document.getElementById('content-area');
+            contentArea.innerHTML = `
+                <div class="container-box p-8">
+                    <h2 class="text-3xl font-bold text-blue-800 mb-6 text-center">我的單字庫</h2>
+                    <div id="libraryCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Library cards will be rendered here -->
+                    </div>
+                    <p id="noLibrariesMessage" class="text-gray-500 text-center mt-8 text-lg ${appData.libraries.length > 0 ? 'hidden' : ''}">
+                        目前沒有單字庫，點擊「新增單字庫」來建立一個吧！
+                    </p>
+                </div>
+            `;
+            const libraryCardsContainer = document.getElementById('libraryCardsContainer');
+            if (appData.libraries.length === 0) {
+                document.getElementById('noLibrariesMessage').classList.remove('hidden');
+            } else {
+                document.getElementById('noLibrariesMessage').classList.add('hidden');
+                appData.libraries.forEach(library => {
+                    const wordCount = library.words ? library.words.length : 0;
+                    const card = `
+                        <div class="library-card bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl shadow-md cursor-pointer flex flex-col justify-between" onclick="showPage('library', '${library.id}')">
+                            <div>
+                                <h3 class="text-xl font-bold text-blue-800 mb-2">${library.name}</h3>
+                                <p class="text-gray-600">單字數量: <span class="font-semibold">${wordCount}</span></p>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button class="btn-secondary text-sm px-3 py-1" onclick="event.stopPropagation(); editLibrary('${library.id}')">編輯</button>
+                                <button class="btn-danger text-sm px-3 py-1" onclick="event.stopPropagation(); deleteLibrary('${library.id}')">刪除</button>
+                            </div>
+                        </div>
+                    `;
+                    libraryCardsContainer.innerHTML += card;
+                });
+            }
+        }
+
+        function renderLibraryPage(libraryId) {
+            const library = appData.libraries.find(lib => lib.id === libraryId);
+            if (!library) {
+                alert('單字庫不存在！');
+                showPage('home');
+                return;
+            }
+
+            const contentArea = document.getElementById('content-area');
+            contentArea.innerHTML = `
+                <div class="container-box p-8 relative">
+                    <button class="btn-icon absolute top-6 left-6" onclick="showPage('home')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-gray-600 hover:text-blue-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                        </svg>
+                    </button>
+                    <h2 class="text-3xl font-bold text-blue-800 mb-2 text-center">${library.name}</h2>
+                    <p class="text-gray-600
