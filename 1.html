@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧單字複習系統</title>
+    <!-- Tailwind CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Tesseract.js CDN -->
+    <script src='https://unpkg.com/tesseract.js@4.1.0/dist/tesseract.min.js'></script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #F9FAFB; /* Light Gray */
+            color: #333;
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .card {
+            @apply bg-white rounded-lg shadow-md p-6 transition-all duration-300 hover:shadow-lg hover:scale-[1.01];
+        }
+        .btn-primary {
+            @apply bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75;
+        }
+        .btn-secondary {
+            @apply bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75;
+        }
+        .btn-success {
+            @apply bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75;
+        }
+        .btn-danger {
+            @apply bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75;
+        }
+        .input-field {
+            @apply border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+        }
+
+        /* Page Transitions */
+        .page {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            visibility: hidden;
+            overflow-y: auto; /* Allow scrolling on pages */
+        }
+        .page.active {
+            opacity: 1;
+            visibility: visible;
+            position: static; /* Take up space when active */
+        }
+        .page-container {
+            position: relative;
+            min-height: calc(100vh - 8rem); /* Adjust based on header/footer if any */
+            overflow: hidden; /* Only current active page should scroll */
+        }
+
+        /* Flashcard Flip */
+        .flashcard-container {
+            perspective: 1000px;
+            width: 100%;
+            height: 300px;
+            max-width: 500px;
+            margin: auto;
+        }
+        .flashcard {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            cursor: pointer;
+        }
+        .flashcard.flipped {
+            transform: rotateY(180deg);
+        }
+        .flashcard-front, .flashcard-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            @apply bg-white rounded-xl shadow-lg flex items-center justify-center text-center p-6 text-2xl font-bold;
+        }
+        .flashcard-back {
+            transform: rotateY(180deg);
+            @apply flex-col text-xl;
+        }
+        .flashcard-back .meaning {
+            @apply text-blue-700 mb-2;
+        }
+        .flashcard-back .example {
+            @apply text-gray-600 text-base font-normal italic;
+        }
+
+        /* Custom Modal Styles */
+        .modal {
+            @apply fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 transition-all duration-300;
+            visibility: hidden;
+            opacity: 0;
+        }
+        .modal.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-content {
+            @apply bg-white p-6 rounded-lg shadow-xl max-w-lg w-full transform transition-all duration-300 scale-95 opacity-0;
+        }
+        .modal.show .modal-content {
+            @apply scale-100 opacity-100;
+        }
+
+        /* Custom animation for buttons on hover */
+        .hover-scale:hover {
+            transform: scale(1.03);
+        }
+    </style>
+    <!-- Google Fonts for Traditional Chinese -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen flex flex-col">
+    <header class="bg-blue-800 text-white p-4 shadow-md z-10">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 id="main-header-title" class="text-3xl font-bold">智慧單字複習系統</h1>
+            <nav id="nav-buttons" class="space-x-4">
+                <button id="homeBtn" class="hover:text-blue-200 transition-colors duration-200 text-lg hidden" onclick="showPage('homePage')">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2 2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    回首頁
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="flex-grow container mx-auto p-4 md:p-8 relative page-container">
+        <!-- Home Page -->
+        <section id="homePage" class="page active p-4 md:p-8 flex flex-col items-center justify-center">
+            <h2 class="text-4xl font-extrabold text-blue-900 mb-12 animate-fade-in-down">您的單字庫</h2>
+            <div id="libraryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-5xl">
+                <!-- Library cards will be rendered here -->
+            </div>
+            <div class="fixed bottom-8 flex flex-wrap justify-center gap-4 w-full px-4">
+                <button class="btn-primary flex items-center hover-scale" onclick="showAddLibraryModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    新增單字庫
+                </button>
+                <button class="btn-success flex items-center hover-scale" onclick="showPage('ocrPage')">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    掃描單字
+                </button>
+                <button class="btn-danger flex items-center hover-scale" onclick="showPage('mistakePage')">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    錯題集
+                </button>
+            </div>
+        </section>
+
+        <!-- Vocabulary Library Page -->
+        <section id="libraryPage" class="page p-4 md:p-8">
+            <button class="btn-secondary mb-6 flex items-center" onclick="showPage('homePage')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                返回
+            </button>
+            <h2 id="libraryPageTitle" class="text-3xl font-bold text-blue-800 mb-6"></h2>
+            <div class="mb-6 flex flex-wrap gap-4 items-center">
+                <input type="text" id="wordSearchInput" placeholder="搜尋單字 (英/中)" class="input-field flex-grow max-w-sm">
+                <select id="familiarityFilter" class="input-field">
+                    <option value="">所有單字</option>
+                    <option value="unfamiliar">不熟悉 (紅)</option>
+                    <option value="half-familiar">半熟悉 (橘)</option>
+                    <option value="familiar">熟悉 (綠)</option>
+                </select>
+                <button class="btn-primary flex items-center" onclick="showAddWordModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    新增單字
+                </button>
+                <button class="btn-success flex items-center" onclick="startReview('flashcard')">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    開始抽認卡複習
+                </button>
+                <button class="btn-success flex items-center" onclick="startReview('spellfill')">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    開始測驗複習
+                </button>
+            </div>
+            <div id="wordList" class="grid grid-cols-1 gap-4">
+                <!-- Word cards will be rendered here -->
+            </div>
+        </section>
+
+        <!-- OCR Scan Page -->
+        <section id="ocrPage" class="page p-4 md:p-8 flex flex-col items-center">
+            <button class="btn-secondary mb-6 flex items-center self-start" onclick="showPage('homePage')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                返回
+            </button>
+            <h2 class="text-3xl font-bold text-blue-800 mb-6">掃描單字</h2>
+            <div class="card w-full max-w-2xl mb-6">
+                <input type="file" id="ocrImageInput" accept="image/*" class="mb-4">
+                <video id="ocrVideo" class="w-full h-auto rounded-lg mb-4 hidden" autoplay></video>
+                <canvas id="ocrCanvas" class="hidden"></canvas>
+                <button id="startCameraButton" class="btn-primary mr-2">開啟相機</button>
+                <button id="captureImageButton" class="btn-success mr-2 hidden">拍照</button>
+                <button id="recognizeButton" class="btn-primary" disabled>開始識別</button>
+                <p id="ocrStatus" class="mt-4 text-center text-gray-600"></p>
+                <img id="previewImage" class="mt-4 max-w-full h-auto rounded-lg hidden" alt="Preview Image">
+            </div>
+            <h3 class="text-2xl font-semibold text-blue-700 mb-4">臨時單字庫</h3>
+            <div id="tempWordList" class="grid grid-cols-1 gap-4 w-full max-w-2xl">
+                <!-- Recognized words will appear here -->
+            </div>
+            <div class="mt-6 flex gap-4">
+                <button id="clearTempBankBtn" class="btn-danger" disabled>清空臨時庫</button>
+                <button id="importSelectedToLibraryBtn" class="btn-primary" disabled onclick="showImportToLibraryModal()">匯入選取單字</button>
+            </div>
+        </section>
+
+        <!-- Review Page (Flashcard & Spelling/Fill-in-the-Blank) -->
+        <section id="reviewPage" class="page p-4 md:p-8 flex flex-col items-center justify-center">
+            <button class="btn-secondary mb-6 flex items-center self-start" onclick="exitReview()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                結束複習
+            </button>
+            <h2 id="reviewModeTitle" class="text-3xl font-bold text-blue-800 mb-8"></h2>
+
+            <!-- Flashcard Mode UI -->
+            <div id="flashcardMode" class="hidden w-full max-w-xl">
+                <div class="flashcard-container mb-8">
+                    <div id="flashcard" class="flashcard">
+                        <div class="flashcard-front">
+                            <span id="flashcardEnglish"></span>
+                        </div>
+                        <div class="flashcard-back">
+                            <span id="flashcardChinese" class="meaning"></span>
+                            <span id="flashcardNote" class="example"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-center space-x-4 mt-8">
+                    <button class="btn-danger px-6 py-3 text-lg" onclick="setFamiliarityFromReview('unfamiliar')">不熟悉</button>
+                    <button class="bg-orange-500 text-white px-6 py-3 rounded-lg text-lg hover:bg-orange-600 transition-colors duration-200" onclick="setFamiliarityFromReview('half-familiar')">半熟悉</button>
+                    <button class="btn-success px-6 py-3 text-lg" onclick="setFamiliarityFromReview('familiar')">熟悉</button>
+                </div>
+            </div>
+
+            <!-- Spelling & Fill-in-the-Blank Mode UI -->
+            <div id="spellFillMode" class="hidden w-full max-w-xl">
+                <div class="card p-8 mb-6">
+                    <p class="text-xl text-gray-700 mb-4" id="questionNumber"></p>
+                    <p class="text-3xl font-bold text-blue-700 mb-6" id="questionText"></p>
+                    <input type="text" id="answerInput" class="input-field w-full text-center text-xl p-3" placeholder="輸入您的答案">
+                    <p id="feedbackText" class="text-center text-lg mt-4 font-semibold"></p>
+                </div>
+                <div class="flex justify-center">
+                    <button id="submitAnswerBtn" class="btn-primary px-8 py-3 text-xl" onclick="submitAnswer()">提交答案</button>
+                    <button id="nextQuestionBtn" class="btn-success px-8 py-3 text-xl ml-4 hidden" onclick="nextQuestion()">下一題</button>
+                </div>
+                <div id="reviewResult" class="card p-6 mt-8 hidden">
+                    <h3 class="text-2xl font-bold text-center mb-4">複習結果</h3>
+                    <p class="text-xl text-center mb-4">您答對了 <span id="correctCount" class="font-bold text-green-600"></span> 題，共 <span id="totalCount" class="font-bold"></span> 題。</p>
+                    <div id="mistakeReviewSection" class="mt-4">
+                        <h4 class="text-lg font-semibold mb-2">本次錯題：</h4>
+                        <ul id="currentMistakeList" class="list-disc pl-5 text-gray-700"></ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Mistake Collection Page -->
+        <section id="mistakePage" class="page p-4 md:p-8">
+            <button class="btn-secondary mb-6 flex items-center self-start" onclick="showPage('homePage')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                返回
+            </button>
+            <h2 class="text-3xl font-bold text-blue-800 mb-6">錯題集</h2>
+            <div class="mb-6 flex flex-wrap gap-4 items-center">
+                <input type="text" id="mistakeSearchInput" placeholder="搜尋錯題 (英/中)" class="input-field flex-grow max-w-sm">
+                <button class="btn-danger flex items-center" onclick="clearAllMistakes()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    清空錯題集
+                </button>
+                <button class="btn-success flex items-center" onclick="startMistakeReview()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    開始錯題複習
+                </button>
+            </div>
+            <div id="mistakeWordList" class="grid grid-cols-1 gap-4">
+                <!-- Mistake words will be rendered here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Add/Edit Library Modal -->
+    <div id="libraryModal" class="modal">
+        <div class="modal-content">
+            <h3 id="libraryModalTitle" class="text-2xl font-bold mb-4 text-blue-800">新增單字庫</h3>
+            <input type="text" id="libraryNameInput" class="input-field w-full mb-4" placeholder="單字庫名稱">
+            <div class="flex justify-end space-x-4">
+                <button class="btn-secondary" onclick="closeModal('libraryModal')">取消</button>
+                <button class="btn-primary" onclick="saveLibrary()">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Word Modal -->
+    <div id="wordModal" class="modal">
+        <div class="modal-content">
+            <h3 id="wordModalTitle" class="text-2xl font-bold mb-4 text-blue-800">新增單字</h3>
+            <input type="text" id="wordEnglishInput" class="input-field w-full mb-3" placeholder="英文單字">
+            <input type="text" id="wordChineseInput" class="input-field w-full mb-3" placeholder="中文解釋">
+            <textarea id="wordNoteInput" class="input-field w-full mb-4" rows="3" placeholder="備註 (例句等)"></textarea>
+            <div class="flex justify-end space-x-4">
+                <button class="btn-secondary" onclick="closeModal('wordModal')">取消</button>
+                <button class="btn-primary" onclick="saveWord()">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import OCR Words to Library Modal -->
+    <div id="importToLibraryModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-2xl font-bold mb-4 text-blue-800">匯入單字到單字庫</h3>
+            <p class="mb-4">請選擇要匯入的單字庫：</p>
+            <select id="selectImportLibrary" class="input-field w-full mb-4">
+                <!-- Library options will be dynamically loaded here -->
+            </select>
+            <div class="flex justify-end space-x-4">
+                <button class="btn-secondary" onclick="closeModal('importToLibraryModal')">取消</button>
+                <button class="btn-primary" onclick="confirmImportSelectedWords()">匯入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Modal for duplicate words or general messages -->
+    <div id="alertModal" class="modal">
+        <div class="modal-content bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg shadow-md">
+            <p id="alertMessage" class="font-bold text-lg"></p>
+            <div class="flex justify-end mt-4">
+                <button class="btn-secondary" onclick="closeModal('alertModal')">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-gray-800 text-white p-4 text-center text-sm mt-auto">
+        &copy; 2023 智慧單字複習系統. All rights reserved.
+    </footer>
+
+    <script>
+        // Global state
+        let currentLibraryId = null;
+        let editingWordId = null;
+        let videoStream = null;
+        let tempOcrWords = []; // Array to hold words from OCR scanning before importing
+        let reviewWords = []; // Words for the current review session
+        let currentReviewIndex = 0;
+        let reviewMode = ''; // 'flashcard' or 'spellfill'
+        let currentQuiz = null; // Holds the current quiz question for spell/fill mode
+        let correctAnswersCount = 0;
+        let totalQuestionsCount = 0;
+        let currentMistakes = []; // Mistakes made in the current quiz session
+
+        const appState = {
+            libraries: [],
+            mistakeCollection: []
+        };
+
+        // --- Utility Functions ---
+        function generateId() {
+            return '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function saveState() {
+            localStorage.setItem('vocabularyAppState', JSON.stringify(appState));
+        }
+
+        function loadState() {
+            const savedState = localStorage.getItem('vocabularyAppState');
+            if (savedState) {
+                Object.assign(appState, JSON.parse(savedState));
+            } else {
+                // Initialize with some dummy data if empty for demonstration
+                appState.libraries.push({
+                    id: generateId(),
+                    name: 'TOEFL 高頻單字',
+                    words: [
+                        { id: generateId(), english: 'ubiquitous', chinese: '無處不在的', note: 'Smartphones are becoming ubiquitous.', familiarity: 'unfamiliar' },
+                        { id: generateId(), english: 'ephemeral', chinese: '短暫的', note: 'Fashion trends are often ephemeral.', familiarity: 'half-familiar' },
+                        { id: generateId(), english: 'serendipity', chinese: '意外發現的幸運', note: 'Finding a twenty-dollar bill was pure serendipity.', familiarity: 'familiar' },
+                        { id: generateId(), english: 'benevolent', chinese: '仁慈的', note: 'A benevolent smile.', familiarity: 'unfamiliar' },
+                        { id: generateId(), english: 'cacophony', chinese: '刺耳的聲音', note: 'The cacophony of traffic.', familiarity: 'half-familiar' }
+                    ]
+                });
+                appState.libraries.push({
+                    id: generateId(),
+                    name: '商用英文',
+                    words: [
+                        { id: generateId(), english: 'leverage', chinese: '利用、施加影響', note: 'We need to leverage our strengths.', familiarity: 'familiar' },
+                        { id: generateId(), english: 'synergy', chinese: '協同作用', note: 'Teamwork creates synergy.', familiarity: 'half-familiar' }
+                    ]
+                });
+                saveState();
+            }
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(pageId).classList.add('active');
+
+            // Update header and nav buttons based on page
+            const mainHeader = document.getElementById('main-header-title');
+            const homeButton = document.getElementById('homeBtn');
+            if (pageId === 'homePage') {
+                mainHeader.textContent = '智慧單字複習系統';
+                homeButton.classList.add('hidden');
+                renderLibraryList();
+            } else if (pageId === 'libraryPage') {
+                homeButton.classList.remove('hidden');
+            } else if (pageId === 'ocrPage') {
+                mainHeader.textContent = '掃描單字';
+                homeButton.classList.remove('hidden');
+                // Ensure camera is off when leaving OCR page
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                    document.getElementById('ocrVideo').classList.add('hidden');
+                    document.getElementById('captureImageButton').classList.add('hidden');
+                    document.getElementById('startCameraButton').classList.remove('hidden');
+                    videoStream = null;
+                }
+                document.getElementById('recognizeButton').disabled = true;
+                document.getElementById('previewImage').classList.add('hidden');
+                document.getElementById('ocrImageInput').value = ''; // Clear file input
+                renderTempOcrWords(); // Refresh temporary list
+            } else if (pageId === 'reviewPage') {
+                homeButton.classList.remove('hidden');
+            } else if (pageId === 'mistakePage') {
+                mainHeader.textContent = '錯題集';
+                homeButton.classList.remove('hidden');
+                renderMistakeList();
+            }
+        }
+
+        function getFamiliarityColor(familiarity) {
+            switch (familiarity) {
+                case 'unfamiliar':
