@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧單字複習系統</title>
+    <!-- Tailwind CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Tesseract.js CDN -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@4.1.0/dist/tesseract.min.js'></script>
+    <style>
+        /* Custom Scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Custom styles for animations and layered look */
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #F9FAFB; /* Light Gray */
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            border: 1px solid #E5E7EB; /* border-gray-200 */
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+        }
+
+        .btn-primary {
+            background-color: #1E3A8A; /* Deep Blue */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem; /* rounded-lg */
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+        }
+
+        .btn-primary:hover {
+            background-color: #102A6A; /* Darker Blue */
+            transform: translateY(-2px);
+        }
+
+        .btn-accent {
+            background-color: #10B981; /* Teal Green */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem; /* rounded-lg */
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+        }
+
+        .btn-accent:hover {
+            background-color: #0E9B6C; /* Darker Teal */
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background-color: #DC2626; /* Red */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+        }
+
+        .btn-danger:hover {
+            background-color: #B91C1C; /* Darker Red */
+            transform: translateY(-2px);
+        }
+
+        .input-field {
+            border: 1px solid #D1D5DB; /* border-gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+            padding: 0.75rem;
+            width: 100%;
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+        .input-field:focus {
+            border-color: #1E3A8A;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.2);
+        }
+
+        /* Page Transitions */
+        .page {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Flashcard Flip Animation */
+        .flashcard-container {
+            perspective: 1000px;
+            width: 100%;
+            max-width: 400px;
+            height: 250px;
+            margin: 2rem auto;
+            position: relative;
+        }
+
+        .flashcard {
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.6s ease-in-out;
+            position: relative;
+        }
+
+        .flashcard.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .flashcard-front,
+        .flashcard-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 1.5rem;
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #1E3A8A;
+            background-color: white;
+        }
+
+        .flashcard-back {
+            transform: rotateY(180deg);
+            flex-direction: column;
+            font-size: 1.2rem;
+            color: #374151;
+        }
+        .flashcard-back span {
+            font-weight: normal;
+            margin-top: 0.5rem;
+            font-size: 1rem;
+            color: #6B7280;
+        }
+
+        /* Familiarity Indicators */
+        .familiarity-red { background-color: #FEE2E2; color: #EF4444; } /* Red-100, Red-500 */
+        .familiarity-orange { background-color: #FFEDD5; color: #F97316; } /* Orange-100, Orange-500 */
+        .familiarity-green { background-color: #D1FAE5; color: #10B981; } /* Green-100, Green-500 */
+
+        .familiarity-dot-red { background-color: #EF4444; }
+        .familiarity-dot-orange { background-color: #F97316; }
+        .familiarity-dot-green { background-color: #10B981; }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 90%;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .fade-out {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(10px); }
+        }
+
+    </style>
+    <!-- Google Fonts for Noto Sans TC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased font-sans flex flex-col min-h-screen">
+
+    <!-- Main Application Container -->
+    <div class="container mx-auto p-4 flex-grow relative">
+
+        <!-- Header - Always visible -->
+        <header class="bg-white p-6 rounded-b-xl shadow-md mb-6 flex items-center justify-between sticky top-0 z-10">
+            <h1 id="app-title" class="text-3xl font-bold text-gray-800">智慧單字複習系統</h1>
+            <button id="back-button" class="btn-primary py-2 px-4 text-sm hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                返回
+            </button>
+        </header>
+
+        <!-- Home Page -->
+        <div id="home-page" class="page active">
+            <div id="library-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Vocabulary Library Cards will be rendered here -->
+            </div>
+            <div class="fixed bottom-4 left-4 right-4 flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4 p-4 bg-white rounded-xl shadow-lg">
+                <button id="add-library-btn" class="btn-primary flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    新增單字庫
+                </button>
+                <button id="scan-word-btn" class="btn-accent flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    掃描單字
+                </button>
+                <button id="mistake-collection-btn" class="btn-danger flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    錯題集
+                </button>
+            </div>
+        </div>
+
+        <!-- Vocabulary Library Page -->
+        <div id="library-page" class="page">
+            <h2 id="current-library-name" class="text-3xl font-bold text-gray-800 mb-6"></h2>
+            <div class="flex flex-wrap items-center justify-between mb-6 gap-4">
+                <button id="add-word-btn" class="btn-primary py-2 px-4 text-sm flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    新增單字
+                </button>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="word-search" placeholder="搜尋單字..." class="input-field py-2 px-3 text-sm w-48">
+                    <select id="familiarity-filter" class="input-field py-2 px-3 text-sm w-32">
+                        <option value="all">所有熟悉度</option>
+                        <option value="red">不熟悉 (紅)</option>
+                        <option value="orange">半熟悉 (橘)</option>
+                        <option value="green">熟悉 (綠)</option>
+                    </select>
+                    <select id="sort-words" class="input-field py-2 px-3 text-sm w-32">
+                        <option value="alpha">字母排序</option>
+                        <option value="familiarity">熟悉度排序</option>
+                    </select>
+                </div>
+                <button id="start-review-btn" class="btn-accent py-2 px-4 text-sm flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    開始複習
+                </button>
+            </div>
+
+            <div id="word-list" class="space-y-4">
+                <!-- Word entries will be rendered here -->
+            </div>
+        </div>
+
+        <!-- OCR Scanning Page -->
+        <div id="ocr-page" class="page">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">掃描單字</h2>
+            <div class="card p-6 mb-6">
+                <div class="flex items-center justify-center mb-4">
+                    <input type="file" id="ocr-image-input" accept="image/*" class="hidden">
+                    <button id="select-image-btn" class="btn-primary py-2 px-4 mr-4 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        選擇圖片
+                    </button>
+                    <button id="ocr-start-scan-btn" class="btn-accent py-2 px-4 flex items-center" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13l-3 3m0 0l-3-3m3 3V8m0 13a9 9 0 110-18 9 9 0 010 18z" />
+                        </svg>
+                        開始掃描
+                    </button>
+                </div>
+                <div id="ocr-preview-container" class="mb-4 text-center hidden">
+                    <p class="text-sm text-gray-600 mb-2">預覽圖片:</p>
+                    <img id="ocr-preview-image" class="max-w-full h-auto mx-auto border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <p id="ocr-status" class="text-center text-gray-600 mb-4"></p>
+                <div id="ocr-loading" class="hidden flex items-center justify-center mb-4">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-700 mr-3"></div>
+                    <span class="text-indigo-700">掃描中... 請稍候</span>
+                </div>
+            </div>
+
+            <div id="temp-vocab-bank" class="card p-6">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800">暫存單字庫</h3>
+                <div id="temp-word-list" class="space-y-3 mb-6">
+                    <!-- Scanned words will appear here -->
+                    <p id="no-scanned-words" class="text-gray-500 text-center">沒有已掃描的單字。</p>
+                </div>
+                <div class="flex flex-wrap justify-end gap-3">
+                    <button id="clear-temp-btn" class="btn-danger py-2 px-4 text-sm flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        清除暫存
+                    </button>
+                    <button id="import-temp-btn" class="btn-accent py-2 px-4 text-sm flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-2-4l-4 4m0 0l-4-4m4 4V3" />
+                        </svg>
+                        匯入到單字庫
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Review Mode Selection Page -->
+        <div id="review-mode-select-page" class="page">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">選擇複習模式</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div id="flashcard-mode-card" class="card p-8 text-center cursor-pointer hover:bg-gray-50 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8l4-4 4 4V7m0 3V6a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-4m-4-2H8m8-4H8" />
+                    </svg>
+                    <h3 class="text-xl font-semibold mb-2">抽認卡模式</h3>
+                    <p class="text-gray-600">翻轉卡片，手動設定熟悉度。</p>
+                </div>
+                <div id="spelling-mode-card" class="card p-8 text-center cursor-pointer hover:bg-gray-50 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <h3 class="text-xl font-semibold mb-2">拼寫與填空模式</h3>
+                    <p class="text-gray-600">自動評分，錯題將自動加入錯題集。</p>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Flashcard Review Page -->
+        <div id="flashcard-review-page" class="page">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">抽認卡複習</h2>
+            <div class="card p-6 text-center mb-6">
+                <p class="text-lg text-gray-600 mb-2">複習進度: <span id="flashcard-progress">0</span> / <span id="flashcard-total">0</span></p>
+                <div class="flashcard-container" id="flashcard-display">
+                    <div class="flashcard" id="current-flashcard">
+                        <div class="flashcard-front">
+                            <span id="flashcard-english"></span>
+                        </div>
+                        <div class="flashcard-back">
+                            <span id="flashcard-chinese"></span>
+                            <span id="flashcard-note" class="text-sm"></span>
+                        </div>
+                    </div>
+                </div>
+                <button id="flip-flashcard-btn" class="btn-primary py-2 px-4 mb-6">翻轉卡片</button>
+                <div class="flex justify-center space-x-4">
+                    <button data-familiarity="red" class="familiarity-btn bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-colors">不熟悉</button>
+                    <button data-familiarity="orange" class="familiarity-btn bg-orange-500 hover:bg-orange-600 text-white py-2 px-4 rounded-lg transition-colors">半熟悉</button>
+                    <button data-familiarity="green" class="familiarity-btn bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition-colors">熟悉</button>
+                </div>
+            </div>
+            <button id="flashcard-exit-review-btn" class="btn-danger py-2 px-4 mt-4 block mx-auto">結束複習</button>
+        </div>
+
+
+        <!-- Spelling/Fill-in-the-Blank Review Page -->
+        <div id="spelling-review-page" class="page">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">拼寫與填空複習</h2>
+            <div class="card p-6 mb-6">
+                <p class="text-lg text-gray-600 mb-4">問題 <span id="spelling-question-number">1</span> / <span id="spelling-total-questions">10</span></p>
+                <div id="spelling-question-area" class="text-center mb-6">
+                    <p id="spelling-question-text" class="text-xl font-semibold mb-4"></p>
+                    <input type="text" id="spelling-answer-input" class="input-field max-w-sm mx-auto mb-4 text-center text-lg" placeholder="請輸入答案...">
+                    <p id="spelling-feedback" class="text-lg font-medium"></p>
+                </div>
+                <div class="flex justify-center space-x-4">
+                    <button id="spelling-submit-btn" class="btn-primary py-2 px-6">提交</button>
+                    <button id="spelling-next-btn" class="btn-accent py-2 px-6 hidden">下一題</button>
+                </div>
+            </div>
+            <div id="spelling-results" class="card p-6 hidden">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4 text-center">複習結果</h3>
+                <p class="text-xl text-center mb-4">你的分數: <span id="spelling-score" class="font-bold text-indigo-700"></span></p>
+                <p class="text-center text-gray-600 mb-6" id="spelling-mistake-info"></p>
+                <div class="flex justify-center space-x-4">
+                    <button id="spelling-exit-btn" class="btn-primary py-2 px-6">返回單字庫</button>
+                    <button id="spelling-review-mistakes-btn" class="btn-danger py-2 px-6 hidden">前往錯題集</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mistake Collection Page -->
+        <div id="mistake-collection-page" class="page">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">錯題集</h2>
+            <div id="mistake-list" class="space-y-4 mb-6">
+                <p id="no-mistakes" class="text-gray-500 text-center text-lg">目前沒有錯題。</p>
+            </div>
+            <div class="flex justify-center space-x-4">
+                <button id="clear-mistakes-btn" class="btn-danger py-2 px-4 text-sm flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    清除所有錯題
+                </button>
+                <button id="review-mistakes-btn" class="btn-accent py-2 px-4 text-sm flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    開始錯題複習 (拼寫)
+                </button>
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Add/Edit Library Modal -->
+    <div id="library-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="library-modal-title" class="text-2xl font-bold mb-4 text-gray-800">新增單字庫</h3>
+            <div class="mb-4">
+                <label for="library-name-input" class="block text-gray-700 text-sm font-bold mb-2">單字庫名稱:</label>
+                <input type="text" id="library-name-input" class="input-field" placeholder="輸入單字庫名稱...">
+                <p id="library-name-error" class="text-red-500 text-xs mt-1 hidden">名稱不能為空或重複！</p>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="cancel-library-modal-btn" class="btn-danger py-2 px-4 text-sm">取消</button>
+                <button id="save-library-modal-btn" class="btn-primary py-2 px-4 text-sm">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Word Modal -->
+    <div id="word-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="word-modal-title" class="text-2xl font-bold mb-4 text-gray-800">新增單字</h3>
+            <div class="mb-4">
+                <label for="word-english-input" class="block text-gray-700 text-sm font-bold mb-2">英文單字:</label>
+                <input type="text" id="word-english-input" class="input-field" placeholder="輸入英文單字...">
+                <p id="word-english-error" class="text-red-500 text-xs mt-1 hidden">英文單字不能為空！</p>
+            </div>
+            <div class="mb-4">
+                <label for="word-chinese-input" class="block text-gray-700 text-sm font-bold mb-2">中文意思:</label>
+                <input type="text" id="word-chinese-input" class="input-field" placeholder="輸入中文意思...">
+                <p id="word-chinese-error" class="text-red-500 text-xs mt-1 hidden">中文意思不能為空！</p>
+            </div>
+            <div class="mb-4">
+                <label for="word-note-input" class="block text-gray-700 text-sm font-bold mb-2">備註/例句 (可選):</label>
+                <textarea id="word-note-input" class="input-field" rows="3" placeholder="輸入備註或例句..."></textarea>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="cancel-word-modal-btn" class="btn-danger py-2 px-4 text-sm">取消</button>
+                <button id="save-word-modal-btn" class="btn-primary py-2 px-4 text-sm">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Scanned Words Modal -->
+    <div id="import-scan-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">匯入掃描單字</h3>
+            <p class="mb-4 text-gray-600">請選擇要將單字匯入的單字庫：</p>
+            <div class="mb-4">
+                <label for="import-library-select" class="block text-gray-700 text-sm font-bold mb-2">選擇單字庫:</label>
+                <select id="import-library-select" class="input-field">
+                    <!-- Options will be populated by JS -->
+                </select>
+                <p id="import-library-error" class="text-red-500 text-xs mt-1 hidden">請選擇一個單字庫！</p>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="cancel-import-scan-modal-btn" class="btn-danger py-2 px-4 text-sm">取消</button>
+                <button id="confirm-import-scan-modal-btn" class="btn-primary py-2 px-4 text-sm">確認匯入</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global State
+        let vocabularyLibraries = [];
+        let currentLibraryId = null;
+        let tempScannedWords = [];
+        let reviewWords = [];
+        let currentReviewIndex = 0;
+        let correctAnswers = 0;
+        let spellingReviewWords = [];
+        let mistakeCollection = [];
+
+        const PAGES = {
+            HOME: 'home-page',
+            LIBRARY: 'library-page',
+            OCR: 'ocr-page',
+            REVIEW_MODE_SELECT: 'review-mode-select-page',
+            FLASHCARD_REVIEW: 'flashcard-review-page',
+            SPELLING_REVIEW: 'spelling-review-page',
+            MISTAKE_COLLECTION: 'mistake-collection-page'
+        };
+        let currentPage = PAGES.HOME;
+
+        const FAMILIARITY_LEVELS = {
+            RED: 'red',      // Unfamiliar
+            ORANGE: 'orange',  // Half-familiar
+            GREEN: 'green'   // Familiar
+        };
+
+        const LOCAL_STORAGE_KEY = 'smartVocabSystemData';
+
+        // Helper to get a unique ID
+        const generateUniqueId = () => '_' + Math.random().toString(36).substr(2, 9);
+
+        // --- Data Persistence (LocalStorage) ---
+        const loadData = () => {
+            const data = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (data) {
+                const parsedData = JSON.parse(data);
+                vocabularyLibraries = parsedData.libraries || [];
+                mistakeCollection = parsedData.mistakes || [];
+            }
+        };
+
+        const saveData = () => {
+            const dataToSave = {
+                libraries: vocabularyLibraries,
+                mistakes: mistakeCollection
+            };
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+        };
+
+        // --- Navigation ---
+        const showPage = (pageId, title = "智慧單字複習系統", showBack = true) => {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(pageId).classList.add('active');
+            document.getElementById('app-title').textContent = title;
+            currentPage = pageId;
+
+            if (showBack && pageId !== PAGES.HOME) {
+                document.getElementById('back-button').classList.remove('hidden');
+            } else {
+                document.getElementById('back-button').classList.add('hidden');
+            }
+            // Scroll to top of the page content area
+            document.querySelector('.container').scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        document.getElementById('back-button').addEventListener('click', () => {
+            if (currentPage === PAGES.LIBRARY) {
+                showPage(PAGES.HOME);
+                renderLibraries();
+            } else if (currentPage === PAGES.OCR) {
+                showPage(PAGES.HOME);
+                renderLibraries();
+            } else if (currentPage === PAGES.REVIEW_MODE_SELECT) {
+                showPage(PAGES.LIBRARY, getLibraryName(currentLibraryId));
+                renderWords(currentLibraryId);
+            } else if (currentPage === PAGES.FLASHCARD_REVIEW || currentPage === PAGES.SPELLING_REVIEW) {
+                // If exiting review, go back to the library or mistake collection
+                if (currentLibraryId) {
+                    showPage(PAGES.LIBRARY, getLibraryName(currentLibraryId));
+                    renderWords(currentLibraryId);
+                } else { // Must be reviewing mistakes
+                    showPage(PAGES.MISTAKE_COLLECTION);
+                    renderMistakes();
+                }
+            } else if (currentPage === PAGES.MISTAKE_COLLECTION) {
+                showPage(PAGES.HOME);
+                renderLibraries();
+            }
+        });
+
+
+        // --- Home Page (Vocabulary Library Overview) ---
+        const renderLibraries = () => {
+            const libraryList = document.getElementById('library-list');
+            libraryList.innerHTML = '';
+            if (vocabularyLibraries.length === 0) {
+                libraryList.innerHTML = '<p class="text-center text-gray-500 text-lg col-span-full">尚無單字庫，點擊「新增單字庫」建立一個吧！</p>';
+                return;
+            }
+
+            vocabularyLibraries.forEach(library => {
+                const card = document.createElement('div');
+                card.className = 'card p-6 cursor-pointer hover:bg-gray-50 transition-all';
+                card.innerHTML = `
+                    <h3 class="text-xl font-semibold mb-2 text-indigo-700">${library.name}</h3>
+                    <p class="text-gray-600 mb-4">單字數量: ${library.words.length}</p>
+                    <div class="flex justify-end space-x-2">
+                        <button data-id="${library.id}" class="edit-library-btn text-gray-500 hover:text-indigo-700 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <button data-id="${library.id}" class="delete-library-btn text-gray-500 hover:text-red-500 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                card.querySelector('h3').addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent card click from triggering when clicking title
+                    currentLibraryId = library.id;
+                    showPage(PAGES.LIBRARY, library.name);
+                    renderWords(library.id);
+                });
+                card.querySelector('.edit-library-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    editLibrary(library.id);
+                });
+                card.querySelector('.delete-library-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteLibrary(library.id);
+                });
+                card.addEventListener('click', () => {
+                    currentLibraryId = library.id;
+                    showPage(PAGES.LIBRARY, library.name);
+                    renderWords(library.id);
+                });
+                libraryList.appendChild(card);
+            });
+        };
+
+        // --- Library Modals and Actions ---
+        const libraryModal = document.getElementById('library-modal');
+        const libraryModalTitle = document.getElementById('library-modal-title');
+        const libraryNameInput = document.getElementById('library-name-input');
+        const libraryNameError = document.getElementById('library-name-error');
+        const saveLibraryBtn = document.getElementById('save-library-modal-btn');
+        const cancelLibraryBtn = document.getElementById('cancel-library-modal-btn');
+        let editingLibraryId = null;
+
+        document.getElementById('add-library-btn').addEventListener('click', () => {
+            editingLibraryId = null;
+            libraryModalTitle.textContent = '新增單字庫';
+            libraryNameInput.value = '';
+            libraryNameError.classList.add('hidden');
+            libraryModal.classList.add('active');
+        });
+
+        cancelLibraryBtn.addEventListener('click', () => {
+            libraryModal.classList.remove('active');
+        });
+
+        saveLibraryBtn.addEventListener('click', () => {
+            const name = libraryNameInput.value.trim();
+            if (!name) {
+                libraryNameError.textContent = '名稱不能為空！';
+                libraryNameError.classList.remove('hidden');
+                return;
+            }
+            if (vocabularyLibraries.some(lib => lib.name === name && lib.id !== editingLibraryId)) {
+                libraryNameError.textContent = '單字庫名稱已存在！';
+                libraryNameError.classList.remove('hidden');
+                return;
+            }
+
+            if (editingLibraryId) {
+                const library = vocabularyLibraries.find(lib => lib.id === editingLibraryId);
+                if (library) library.name = name;
+            } else {
+                vocabularyLibraries.push({
+                    id: generateUniqueId(),
+                    name: name,
+                    words: []
+                });
+            }
+            saveData();
+            renderLibraries();
+            libraryModal.classList.remove('active');
+        });
+
+        const editLibrary = (id) => {
+            const library = vocabularyLibraries.find(lib => lib.id === id);
+            if (library) {
+                editingLibraryId = id;
+                libraryModalTitle.textContent = '編輯單字庫';
+                libraryNameInput.value = library.name;
+                libraryNameError.classList.add('hidden');
+                libraryModal.classList.add('active');
+            }
+        };
+
+        const deleteLibrary = (id) => {
+            if (confirm('確定要刪除此單字庫嗎？所有單字將會遺失！')) {
+                vocabularyLibraries = vocabularyLibraries.filter(lib => lib.id !== id);
+                saveData();
+                renderLibraries();
+            }
+        };
+
+        const getLibraryName = (id) => {
+            const library = vocabularyLibraries.find(lib => lib.id === id);
+            return library ? `單字庫: ${library.name}` : '智慧單字複習系統';
+        };
+
+
+        // --- Vocabulary Library Page ---
+        const renderWords = (libraryId, filter = 'all', sort = 'alpha') => {
+            const library = vocabularyLibraries.find(lib => lib.id === libraryId);
+            const wordListDiv = document.getElementById('word-list');
+            wordListDiv.innerHTML = '';
+            document.getElementById('current-library-name').textContent = `單字庫: ${library.name} (${library.words.length} 個單字)`;
+
+            let wordsToRender = [...library.words];
+
+            // Apply filter
+            if (filter !== 'all') {
+                wordsToRender = wordsToRender.filter(word => word.familiarity === filter);
+            }
+
+            // Apply sort
+            if (sort === 'alpha') {
+                wordsToRender.sort((a, b) => a.english.localeCompare(b.english));
+            } else if (sort === 'familiarity') {
+                const familiarityOrder = { 'red': 1, 'orange': 2, 'green': 3 };
+                wordsToRender.sort((a, b) => familiarityOrder[a.familiarity] - familiarityOrder[b.familiarity]);
+            }
+
+            if (wordsToRender.length === 0) {
+                wordListDiv.innerHTML = '<p class="text-center text-gray-500 text-lg">此單字庫中沒有單字。</p>';
+                return;
+            }
+
+            wordsToRender.forEach(word => {
+                const wordCard = document.createElement('div');
+                wordCard.className = `card p-4 flex items-center justify-between transition-colors ${getFamiliarityColorClass(word.familiarity, 'bg')} border-l-8 ${getFamiliarityColorClass(word.familiarity, 'border')}`;
+                wordCard.innerHTML = `
+                    <div>
+                        <p class="text-xl font-semibold text-gray-800">${word.english}</p>
+                        <p class="text-gray-700">${word.chinese}</p>
+                        ${word.note ? `<p class="text-sm text-gray-500 italic mt-1">備註: ${word.note}</p>` : ''}
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="relative group">
+                            <span class="w-4 h-4 rounded-full inline-block ${getFamiliarityDotClass(word.familiarity)}"></span>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-gray-700 text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                                ${getFamiliarityText(word.familiarity)}
+                            </div>
+                        </div>
+                        <button data-id="${word.id}" class="edit-word-btn text-gray-500 hover:text-indigo-700 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <button data-id="${word.id}" class="delete-word-btn text-gray-500 hover:text-red-500 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                wordListDiv.appendChild(wordCard);
+            });
+
+            wordListDiv.querySelectorAll('.edit-word-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                editWord(currentLibraryId, btn.dataset.id);
+            }));
+            wordListDiv.querySelectorAll('.delete-word-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteWord(currentLibraryId, btn.dataset.id);
+            }));
+        };
+
+        const getFamiliarityColorClass = (level, type = 'bg') => {
+            switch (level) {
+                case FAMILIARITY_LEVELS.RED: return type === 'bg' ? 'familiarity-red' : 'border-red-500';
+                case FAMILIARITY_LEVELS.ORANGE: return type === 'bg' ? 'familiarity-orange' : 'border-orange-500';
+                case FAMILIARITY_LEVELS.GREEN: return type === 'bg' ? 'familiarity-green' : 'border-green-500';
+                default: return '';
+            }
+        };
+
+        const getFamiliarityDotClass = (level) => {
+            switch (level) {
+                case FAMILIARITY_LEVELS.RED: return 'familiarity-dot-red';
+                case FAMILIARITY_LEVELS.ORANGE: return 'familiarity-dot-orange';
+                case FAMILIARITY_LEVELS.GREEN: return 'familiarity-dot-green';
+                default: return '';
+            }
+        };
+
+        const getFamiliarityText = (level) => {
+            switch (level) {
+                case FAMILIARITY_LEVELS.RED: return '不熟悉';
+                case FAMILIARITY_LEVELS.ORANGE: return '半熟悉';
+                case FAMILIARITY_LEVELS.GREEN: return '熟悉';
+                default: return '';
+            }
+        };
+
+
+        // --- Word Modals and Actions ---
+        const wordModal = document.getElementById('word-modal');
+        const wordModalTitle = document.getElementById('word-modal-title');
+        const wordEnglishInput = document.getElementById('word-english-input');
+        const wordChineseInput = document.getElementById('word-chinese-input');
+        const wordNoteInput = document.getElementById('word-note-input');
+        const wordEnglishError = document.getElementById('word-english-error');
+        const wordChineseError = document.getElementById('word-chinese-error');
+        const saveWordBtn = document.getElementById('save-word-modal-btn');
+        const cancelWordBtn = document.getElementById('cancel-word-modal-btn');
+        let editingWordId = null;
+
+        document.getElementById('add-word-btn').addEventListener('click', () => {
+            editingWordId = null;
+            wordModalTitle.textContent = '新增單字';
+            wordEnglishInput.value = '';
+            wordChineseInput.value = '';
+            wordNoteInput.value = '';
+            wordEnglishError.classList.add('hidden');
+            wordChineseError.classList.add('hidden');
+            wordModal.classList.add('active');
+        });
+
+        cancelWordBtn.addEventListener('click', () => {
+            wordModal.classList.remove('active');
+        });
+
+        saveWordBtn.addEventListener('click', () => {
+            const english = wordEnglishInput.value.trim();
+            const chinese = wordChineseInput.value.trim();
+            const note = wordNoteInput.value.trim();
+            let isValid = true;
+
+            if (!english) {
+                wordEnglishError.classList.remove('hidden');
+                isValid = false;
+            } else {
+                wordEnglishError.classList.add('hidden');
+            }
+            if (!chinese) {
+                wordChineseError.classList.remove('hidden');
+                isValid = false;
+            } else {
+                wordChineseError.classList.add('hidden');
+            }
+
+            if (!isValid) return;
+
+            const library = vocabularyLibraries.find(lib => lib.id === currentLibraryId);
+            if (!library) return;
+
+            if (editingWordId) {
+                const word = library.words.find(w => w.id === editingWordId);
+                if (word) {
+                    word.english = english;
+                    word.chinese = chinese;
+                    word.note = note;
+                }
+            } else {
+                library.words.push({
+                    id: generateUniqueId(),
+                    english: english,
+                    chinese: chinese,
+                    note: note,
+                    familiarity: FAMILIARITY_LEVELS.RED // New words start as unfamiliar
+                });
+            }
+            saveData();
+            renderWords(currentLibraryId, document.getElementById('familiarity-filter').value, document.getElementById('sort-words').value);
+            wordModal.classList.remove('active');
+        });
+
+        const editWord = (libraryId, wordId) => {
+            const library = vocabularyLibraries.find(lib => lib.id === libraryId);
+            const word = library ? library.words.find(w => w.id === wordId) : null;
+            if (word) {
+                editingWordId = wordId;
+                wordModalTitle.textContent = '編輯單字';
+                wordEnglishInput.value = word.english;
+                wordChineseInput.value = word.chinese;
+                wordNoteInput.value = word.note;
+                wordEnglishError.classList.add('hidden');
+                wordChineseError.classList.add('hidden');
+                wordModal.classList.add('active');
+            }
+        };
+
+        const deleteWord = (libraryId, wordId) => {
+            if (confirm('確定要刪除此單字嗎？')) {
+                const library = vocabularyLibraries.find(lib => lib.id === libraryId);
+                if (library) {
+                    library.words = library.words.filter(word => word.id !== wordId);
+                    saveData();
+                    renderWords(currentLibraryId, document.getElementById('familiarity-filter').value, document.getElementById('sort-words').value);
+                }
+            }
+        };
+
+        // Word search, filter, sort
+        document.getElementById('word-search').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const library = vocabularyLibraries.find(lib => lib.id === currentLibraryId);
+            if (!library) return;
+
+            const filteredWords = library.words.filter(word =>
+                word.english.toLowerCase().includes(searchTerm) ||
+                word.chinese.toLowerCase().includes(searchTerm)
+            );
+
+            renderFilteredWords(filteredWords);
+        });
+
+        document.getElementById('familiarity-filter').addEventListener('change', () => {
+            renderWords(currentLibraryId, document.getElementById('familiarity-filter').value, document.getElementById('sort-words').value);
+        });
+
+        document.getElementById('sort-words').addEventListener('change', () => {
+            renderWords(currentLibraryId, document.getElementById('familiarity-filter').value, document.getElementById('sort-words').value);
+        });
+
+        const renderFilteredWords = (wordsToRender) => {
+            const wordListDiv = document.getElementById('word-list');
+            wordListDiv.innerHTML = '';
+
+            if (wordsToRender.length === 0) {
+                wordListDiv.innerHTML = '<p class="text-center text-gray-500 text-lg">沒有找到符合條件的單字。</p>';
+                return;
+            }
+
+            wordsToRender.forEach(word => {
+                const wordCard = document.createElement('div');
+                wordCard.className = `card p-4 flex items-center justify-between transition-colors ${getFamiliarityColorClass(word.familiarity, 'bg')} border-l-8 ${getFamiliarityColorClass(word.familiarity, 'border')}`;
+                wordCard.innerHTML = `
+                    <div>
+                        <p class="text-xl font-semibold text-gray-800">${word.english}</p>
+                        <p class="text-gray-700">${word.chinese}</p>
+                        ${word.note ? `<p class="text-sm text-gray-500 italic mt-1">備註: ${word.note}</p>` : ''}
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="relative group">
+                            <span class="w-4 h-4 rounded-full inline-block ${getFamiliarityDotClass(word.familiarity)}"></span>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-gray-700 text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                                ${getFamiliarityText(word.familiarity)}
+                            </div>
+                        </div>
+                        <button data-id="${word.id}" class="edit-word-btn text-gray-500 hover:text-indigo-700 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <button data-id="${word.id}" class="delete-word-btn text-gray-500 hover:text-red-500 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                wordListDiv.appendChild(wordCard);
+            });
+
+            wordListDiv.querySelectorAll('.edit-word-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                editWord(currentLibraryId, btn.dataset.id);
+            }));
+            wordListDiv.querySelectorAll('.delete-word-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteWord(currentLibraryId, btn.dataset.id);
+            }));
+        };
+
+
+        // --- OCR Word Scanning ---
+        document.getElementById('scan-word-btn').addEventListener('click', () => {
+            showPage(PAGES.OCR, '掃描單字');
+            document.getElementById('ocr-image-input').value = null; // Clear previous file
+            document.getElementById('ocr-preview-image').src = '';
+            document.getElementById('ocr-preview-container').classList.add('hidden');
+            document.getElementById('ocr-start-scan-btn').disabled = true;
+            document.getElementById('ocr-status').textContent = '';
+            renderTempWords();
+        });
+
+        const ocrImageInput = document.getElementById('ocr-image-input');
+        const selectImageBtn = document.getElementById('select-image-btn');
+        const ocrStartScanBtn = document.getElementById('ocr-start-scan-btn');
+        const ocrPreviewImage = document.getElementById('ocr-preview-image');
+        const ocrPreviewContainer = document.getElementById('ocr-preview-container');
+        const ocrStatus = document.getElementById('ocr-status');
+        const ocrLoading = document.getElementById('ocr-loading');
+
+        selectImageBtn.addEventListener('click', () => ocrImageInput.click());
+
+        ocrImageInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    ocrPreviewImage.src = e.target.result;
+                    ocrPreviewContainer.classList.remove('hidden');
+                    ocrStartScanBtn.disabled = false;
+                    ocrStatus.textContent = `已選取圖片: ${file.name}`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                ocrPreviewImage.src = '';
+                ocrPreviewContainer.classList.add('hidden');
+                ocrStartScanBtn.disabled = true;
+                ocrStatus.textContent = '';
+            }
+        });
+
+        ocrStartScanBtn.addEventListener('click', async () => {
+            const image = ocrPreviewImage.src;
+            if (!image) {
+                alert('請先選擇一張圖片！');
+                return;
+            }
+
+            ocrLoading.classList.remove('hidden');
+            ocrStatus.textContent = '掃描中...';
+            ocrStartScanBtn.disabled = true;
+            selectImageBtn.disabled = true;
+
+            try {
+                const worker = await Tesseract.createWorker('eng', 1, {
+                     logger: m => {
+                        if (m.status === 'recognizing text') {
+                            ocrStatus.textContent = `掃描中... (${(m.progress * 100).toFixed(0)}%)`;
+                        } else {
+                            console.log(m);
+                        }
+                     }
+                });
+                const { data: { text } } = await worker.recognize(image);
+                await worker.terminate();
+
+                ocrStatus.textContent = '掃描完成！';
+                processScannedText(text);
+            } catch (error) {
+                console.error('OCR Error:', error);
+                ocrStatus.textContent = '掃描失敗，請重試。';
+            } finally {
+                ocrLoading.classList.add('hidden');
+                ocrStartScanBtn.disabled = false;
+                selectImageBtn.disabled = false;
+            }
+        });
+
+        const processScannedText = (text) => {
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            tempScannedWords = []; // Clear previous scanned words
+            lines.forEach(line => {
+                // Simple regex to extract what looks like an English word and remaining Chinese
+                const match = line.match(/^([a-zA-Z\s'-]+)\s*(.*)$/);
+                if (match) {
+                    const english = match[1].trim();
+                    const chinese = match[2].trim();
+                    if (english) { // Only add if an English word is detected
+                        tempScannedWords.push({
+                            id: generateUniqueId(),
+                            english: english,
+                            chinese: chinese,
+                            note: '',
+                            familiarity: FAMILIARITY_LEVELS.RED // Default to red in temp bank
+                        });
+                    }
+                }
+            });
+            renderTempWords();
+        };
+
+        const renderTempWords = () => {
+            const tempWordList = document.getElementById('temp-word-list');
+            tempWordList.innerHTML = '';
+
+            if (tempScannedWords.length === 0) {
+                document.getElementById('no-scanned-words').classList.remove('hidden');
+                return;
+            } else {
+                document.getElementById('no-scanned-words').classList.add('hidden');
+            }
+
+            tempScannedWords.forEach(word => {
+                const wordEntry = document.createElement('div');
+                wordEntry.className = 'card p-3 flex flex-col md:flex-row items-start md:items-center justify-between shadow-sm';
+                wordEntry.innerHTML = `
+                    <div class="flex-grow mb-2 md:mb-0">
+                        <input type="text" value="${word.english}" data-id="${word.id}" data-field="english" class="input-field text-lg font-semibold mb-1 w-full md:w-48 inline-block">
+                        <input type="text" value="${word.chinese}" data-id="${word.id}" data-field="chinese" class="input-field text-gray-700 w-full md:w-64 inline-block">
+                    </div>
+                    <div class="flex space-x-2 mt-2 md:mt-0">
+                        <button data-id="${word.id}" class="delete-temp-word-btn text-gray-500 hover:text-red-500 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                tempWordList.appendChild(wordEntry);
+            });
+
+            tempWordList.querySelectorAll('input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const id = e.target.dataset.id;
+                    const field = e.target.dataset.field;
+                    const word = tempScannedWords.find(w => w.id === id);
+                    if (word) {
+                        word[field] = e.target.value.trim();
+                    }
+                });
+            });
+            tempWordList.querySelectorAll('.delete-temp-word-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                const id = btn.dataset.id;
+                tempScannedWords = tempScannedWords.filter(word => word.id !== id);
+                renderTempWords();
+            }));
+        };
+
+        document.getElementById('clear-temp-btn').addEventListener('click', () => {
+            if (confirm('確定要清除所有暫存單字嗎？')) {
+                tempScannedWords = [];
+                renderTempWords();
+            }
+        });
+
+        const importScanModal = document.getElementById('import-scan-modal');
+        const importLibrarySelect = document.getElementById('import-library-select');
+        const importLibraryError = document.getElementById('import-library-error');
+
+        document.getElementById('import-temp-btn').addEventListener('click', () => {
+            if (tempScannedWords.length === 0) {
+                alert('沒有任何單字可以匯入！');
+                return;
+            }
+            importLibrarySelect.innerHTML = '<option value="">請選擇單字庫</option>';
+            vocabularyLibraries.forEach(lib => {
+                const option = document.createElement('option');
+                option.value = lib.id;
+                option.textContent = lib.name;
+                importLibrarySelect.appendChild(option);
+            });
+            importLibraryError.classList.add('hidden');
+            importScanModal.classList.add('active');
+        });
+
+        document.getElementById('cancel-import-scan-modal-btn').addEventListener('click', () => {
+            importScanModal.classList.remove('active');
+        });
+
+        document.getElementById('confirm-import-scan-modal-btn').addEventListener('click', () => {
+            const selectedLibraryId = importLibrarySelect.value;
+            if (!selectedLibraryId) {
+                importLibraryError.classList.remove('hidden');
+                return;
+            }
+
+            const targetLibrary = vocabularyLibraries.find(lib => lib.id === selectedLibraryId);
+            if (targetLibrary) {
+                let importedCount = 0;
+                tempScannedWords.forEach(tempWord => {
+                    const existingWord = targetLibrary.words.find(w => w.english.toLowerCase() === tempWord.english.toLowerCase());
+                    if (!existingWord) {
+                        targetLibrary.words.push({
+                            id: generateUniqueId(),
+                            english: tempWord.english,
+                            chinese: tempWord.chinese,
+                            note: tempWord.note,
+                            familiarity: FAMILIARITY_LEVELS.RED
+                        });
+                        importedCount++;
+                    } else {
+                        // Optionally update existing word or notify user
+                        console.warn(`Word '${tempWord.english}' already exists in '${targetLibrary.name}'. Skipped.`);
+                    }
+                });
+                saveData();
+                tempScannedWords = []; // Clear temporary bank after import
+                renderTempWords();
+                alert(`成功匯入 ${importedCount} 個新單字到「${targetLibrary.name}」。`);
+                importScanModal.classList.remove('active');
+                showPage(PAGES.HOME); // Go back to home after import
+                renderLibraries();
+            }
+        });
+
+
+        // --- Review System - Mode Selection ---
+        document.getElementById('start-review-btn').addEventListener('click', () => {
+            const library = vocabularyLibraries.find(lib => lib.id === currentLibraryId);
+            if (!library || library.words.length === 0) {
+                alert('此單字庫沒有單字可以複習！');
+                return;
+            }
+            showPage(PAGES.REVIEW_MODE_SELECT, `複習: ${library.name}`);
+        });
+
+        document.getElementById('flashcard-mode-card').addEventListener('click', () => {
+            startFlashcardReview(currentLibraryId);
+        });
+
+        document.getElementById('spelling-mode-card').addEventListener('click', () => {
+            startSpellingReview(currentLibraryId);
+        });
+
+
+        // --- Review System - Flashcard Mode ---
+        let flashcardWords = [];
+        let flashcardIndex = 0;
+
+        const flashcardDisplay = document.getElementById('current-flashcard');
+        const flashcardEnglish = document.getElementById('flashcard-english');
+        const flashcardChinese = document.getElementById('flashcard-chinese');
+        const flashcardNote = document.getElementById('flashcard-note');
+        const flipFlashcardBtn = document.getElementById('flip-flashcard-btn');
+        const familiarityBtns = document.querySelectorAll('.familiarity-btn');
+        const flashcardProgress = document.getElementById('flashcard-progress');
+        const flashcardTotal = document.getElementById('flashcard-total');
+
+        const startFlashcardReview = (libraryId) => {
+            const library = vocabularyLibraries.find(lib => lib.id === libraryId);
+            if (!library || library.words.length === 0) {
+                alert('此單字庫沒有單字可以複習！');
+                return;
+            }
+
+            flashcardWords = [...library.words].sort(() => 0.5 - Math.random()); // Shuffle words
+            flashcardIndex = 0;
+            showPage(PAGES.FLASHCARD_REVIEW, `抽認卡複習: ${library.name}`);
+            loadFlashcard();
+        };
+
+        const loadFlashcard = () => {
+            if (flashcardIndex >= flashcardWords.length) {
+                alert('本輪複習結束！');
+                showPage(PAGES.LIBRARY, getLibraryName(currentLibraryId));
+                renderWords(currentLibraryId);
+                return;
+            }
+
+            const word = flashcardWords[flashcardIndex];
+            flashcardEnglish.textContent = word.english;
+            flashcardChinese.textContent = word.chinese;
+            flashcardNote.textContent = word.note ? `例句/備註: ${word.note}` : '';
+            flashcardDisplay.classList.remove('flipped'); // Reset flip
+            flipFlashcardBtn.textContent = '翻轉卡片';
+
+            flashcardProgress.textContent = flashcardIndex + 1;
+            flashcardTotal.textContent = flashcardWords.length;
+        };
+
+        flipFlashcardBtn.addEventListener('click', () => {
+            flashcardDisplay.classList.toggle('flipped');
+            if (flashcardDisplay.classList.contains('flipped')) {
+                flipFlashcardBtn.textContent = '看英文';
+            } else {
+                flipFlashcardBtn.textContent = '翻轉卡片';
+            }
+        });
+
+        familiarityBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const familiarity = e.target.dataset.familiarity;
+                const currentWord = flashcardWords[flashcardIndex];
+                if (currentWord) {
+                    currentWord.familiarity = familiarity;
+                    saveData(); // Update familiarity
+                }
+                flashcardIndex++;
+                loadFlashcard();
+            });
+        });
+
+        document.getElementById('flashcard-exit-review-btn').addEventListener('click', () => {
+            showPage(PAGES.LIBRARY, getLibraryName(currentLibraryId));
+            renderWords(currentLibraryId);
+        });
+
+
+        // --- Review System - Spelling & Fill-in-the-Blank Mode ---
+        let spellingWords = [];
+        let spellingCurrentQuestionIndex = 0;
+        let spellingCorrectCount = 0;
+        let spellingReviewType = 'library'; // 'library' or 'mistake'
+
+        const spellingQuestionNumber = document.getElementById('spelling-question-number');
+        const spellingTotalQuestions = document.getElementById('spelling-total-questions');
+        const spellingQuestionText = document.getElementById('spelling-question-text');
+        const spellingAnswerInput = document.getElementById('spelling-answer-input');
+        const spellingFeedback = document.getElementById('spelling-feedback');
+        const spellingSubmitBtn = document.getElementById('spelling-submit-btn');
+        const spellingNextBtn = document.getElementById('spelling-next-btn');
+        const spellingResults = document.getElementById('spelling-results');
+        const spellingScore = document.getElementById('spelling-score');
+        const spellingMistakeInfo = document.getElementById('spelling-mistake-info');
+
+        const startSpellingReview = (sourceId, type = 'library') => {
+            spellingReviewType = type;
+            const words = type === 'library'
+                ? vocabularyLibraries.find(lib => lib.id === sourceId).words
+                : mistakeCollection;
+
+            if (!words || words.length === 0) {
+                alert('沒有單字可以複習！');
+                showPage(type === 'library' ? PAGES.LIBRARY : PAGES.MISTAKE_COLLECTION, type === 'library' ? getLibraryName(sourceId) : '錯題集');
+                return;
+            }
+
+            // Sample words based on familiarity
+            const redWords = words.filter(w => w.familiarity === FAMILIARITY_LEVELS.RED);
+            const orangeWords = words.filter(w => w.familiarity === FAMILIARITY_LEVELS.ORANGE);
+            const greenWords = words.filter(w => w.familiarity === FAMILIARITY_LEVELS.GREEN);
+
+            let sampledWords = [];
+            const maxQuestions = Math.min(10, words.length); // Max 10 questions or total words
+
+            const sample = (arr, count) => {
+                const shuffled = [...arr].sort(() => 0.5 - Math.random());
+                return shuffled.slice(0, count);
+            };
+
+            const numRed = Math.ceil(maxQuestions * 0.6);
+            const numOrange = Math.ceil(maxQuestions * 0.3);
+            const numGreen = Math.ceil(maxQuestions * 0.1);
+
+            sampledWords.push(...sample(redWords, numRed));
+            sampledWords.push(...sample(orangeWords, numOrange));
+            sampledWords.push(...sample(greenWords, numGreen));
+
+            // If not enough words of one type, fill with others
+            while (sampledWords.length < maxQuestions && (redWords.length + orangeWords.length + greenWords.length > sampledWords.length)) {
+                if (redWords.length > sampledWords.filter(w => w.familiarity === FAMILIARITY_LEVELS.RED).length) {
+                    const newWord = sample(redWords.filter(w => !sampledWords.includes(w)), 1);
+                    if (newWord.length > 0) sampledWords.push(newWord[0]);
+                } else if (orangeWords.length > sampledWords.filter(w => w.familiarity === FAMILIARITY_LEVELS.ORANGE).length) {
+                    const newWord = sample(orangeWords.filter(w => !sampledWords.includes(w)), 1);
+                    if (newWord.length > 0) sampledWords.push(newWord[0]);
+                } else if (greenWords.length > sampledWords.filter(w => w.familiarity === FAMILIARITY_LEVELS.GREEN).length) {
+                    const newWord = sample(greenWords.filter(w => !sampledWords.includes(w)), 1);
+                    if (newWord.length > 0) sampledWords.push(newWord[0]);
+                }
+            }
+            // Ensure unique words and then shuffle the final selection
+            spellingWords = Array.from(new Set(sampledWords)).slice(0, maxQuestions);
+            spellingWords.sort(() => 0.5 - Math.random()); // Final shuffle
+
+            if (spellingWords.length === 0) {
+                alert('沒有足夠的單字可以開始複習！');
+                showPage(type === 'library' ? PAGES.LIBRARY : PAGES.MISTAKE_COLLECTION, type === 'library' ? getLibraryName(sourceId) : '錯題集');
+                return;
+            }
+
+            spellingCurrentQuestionIndex = 0;
+            spellingCorrectCount = 0;
+            spellingResults.classList.add('hidden');
+            spellingSubmitBtn.classList.remove('hidden');
+            spellingNextBtn.classList.add('hidden');
+            spellingFeedback.textContent = '';
+
+            showPage(PAGES.SPELLING_REVIEW, `拼寫與填空複習: ${type === 'library' ? getLibraryName(sourceId) : '錯題集'}`);
+            loadSpellingQuestion();
+        };
+
+        const loadSpellingQuestion = () => {
+            if (spellingCurrentQuestionIndex >= spellingWords.length) {
+                endSpellingReview();
+                return;
+            }
+
+            const currentWord = spellingWords[spellingCurrentQuestionIndex];
+            spellingQuestionNumber.textContent = spellingCurrentQuestionIndex + 1;
+            spellingTotalQuestions.textContent = spellingWords.length;
+            spellingAnswerInput.value = '';
+            spellingAnswerInput.disabled = false;
+            spellingFeedback.textContent = '';
+            spellingSubmitBtn.classList.remove('hidden');
+            spellingNextBtn.classList.add('hidden');
+
+            // Randomly choose question type: Spelling or Fill-in-the-blank (if note exists)
+            const questionType = currentWord.note && Math.random() < 0.5 ? 'fill-in-the-blank' : 'spelling';
+
+            if (questionType === 'spelling') {
+                spellingQuestionText.textContent = `請拼寫出這個中文意思的英文單字: 「${currentWord.chinese}」`;
+            } else {
+                // Create a fill-in-the-blank sentence
+                const exampleSentence = currentWord.note;
+                const blankedSentence = exampleSentence.replace(new RegExp(`\\b${currentWord.english}\\b`, 'gi'), '_____');
+                spellingQuestionText.textContent = `請填空: 「${blankedSentence}」 (中文意思: ${currentWord.chinese})`;
+            }
+        };
+
+        spellingSubmitBtn.addEventListener('click', () => {
+            const currentWord = spellingWords[spellingCurrentQuestionIndex];
+            const userAnswer = spellingAnswerInput.value.trim().toLowerCase();
+            const correctAnswer = currentWord.english.toLowerCase();
+
+            spellingAnswerInput.disabled = true;
+            spellingSubmitBtn.classList.add('hidden');
+            spellingNextBtn.classList.remove('hidden');
+
+            if (userAnswer === correctAnswer) {
+                spellingFeedback.innerHTML = `<span class="text-green-600 font-bold">正確！</span>`;
+                spellingCorrectCount++;
+                // Increase familiarity
+                currentWord.familiarity = getNextFamiliarity(currentWord.familiarity);
+            } else {
+                spellingFeedback.innerHTML = `<span class="text-red-600 font-bold">錯誤！</span> 正確答案是: <span class="font-bold">${currentWord.english}</span>`;
+                // Decrease familiarity
+                currentWord.familiarity = getPreviousFamiliarity(currentWord.familiarity);
+                // Add to mistake collection if not already there
+                if (!mistakeCollection.some(m => m.id === currentWord.id)) {
+                    mistakeCollection.push(currentWord);
+                }
+            }
+            saveData();
+        });
+
+        spellingNextBtn.addEventListener('click', () => {
+            spellingCurrentQuestionIndex++;
+            loadSpellingQuestion();
+        });
+
+        const endSpellingReview = () => {
+            spellingResults.classList.remove('hidden');
+            spellingScore.textContent = `${spellingCorrectCount} / ${spellingWords.length}`;
+
+            if (mistakeCollection.length > 0) {
+                spellingMistakeInfo.innerHTML = `你可以在<span class="font-semibold text-red-500">錯題集</span>中找到錯誤的單字。`;
+                document.getElementById('spelling-review-mistakes-btn').classList.remove('hidden');
+            } else {
+                spellingMistakeInfo.textContent = `恭喜，本輪複習中沒有錯題！`;
+                document.getElementById('spelling-review-mistakes-btn').classList.add('hidden');
+            }
+        };
+
+        document.getElementById('spelling-exit-btn').addEventListener('click', () => {
+            if (spellingReviewType === 'library') {
+                showPage(PAGES.LIBRARY, getLibraryName(currentLibraryId));
+                renderWords(currentLibraryId);
+            } else {
+                showPage(PAGES.MISTAKE_COLLECTION);
+                renderMistakes();
+            }
+        });
+
+        document.getElementById('spelling-review-mistakes-btn').addEventListener('click', () => {
+            showPage(PAGES.MISTAKE_COLLECTION);
+            renderMistakes();
+        });
+
+        const getNextFamiliarity = (currentFamiliarity) => {
+            if (currentFamiliarity === FAMILIARITY_LEVELS.RED) return FAMILIARITY_LEVELS.ORANGE;
+            if (currentFamiliarity === FAMILIARITY_LEVELS.ORANGE) return FAMILIARITY_LEVELS.GREEN;
+            return FAMILIARITY_LEVELS.GREEN; // Already green, stays green
+        };
+
+        const getPreviousFamiliarity = (currentFamiliarity) => {
+            if (currentFamiliarity === FAMILIARITY_LEVELS.GREEN) return FAMILIARITY_LEVELS.ORANGE;
+            if (currentFamiliarity === FAMILIARITY_LEVELS.ORANGE) return FAMILIARITY_LEVELS.RED;
+            return FAMILIARITY_LEVELS.RED; // Already red, stays red
+        };
+
+
+        // --- Mistake Collection Page ---
+        document.getElementById('mistake-collection-btn').addEventListener('click', () => {
+            showPage(PAGES.MISTAKE_COLLECTION, '錯題集');
+            renderMistakes();
+        });
+
+        const renderMistakes = () => {
+            const mistakeListDiv = document.getElementById('mistake-list');
+            mistakeListDiv.innerHTML = '';
+
+            if (mistakeCollection.length === 0) {
+                document.getElementById('no-mistakes').classList.remove('hidden');
+                document.getElementById('clear-mistakes-btn').classList.add('hidden');
+                document.getElementById('review-mistakes-btn').classList.add('hidden');
+                return;
+            } else {
+                document.getElementById('no-mistakes').classList.add('hidden');
+                document.getElementById('clear-mistakes-btn').classList.remove('hidden');
+                document.getElementById('review-mistakes-btn').classList.remove('hidden');
+            }
+
+            mistakeCollection.forEach(word => {
+                const mistakeCard = document.createElement('div');
+                mistakeCard.className = `card p-4 flex items-center justify-between transition-colors familiarity-red border-l-8 border-red-500`; // Mistakes are always 'red' visual
+                mistakeCard.innerHTML = `
+                    <div>
+                        <p class="text-xl font-semibold text-gray-800">${word.english}</p>
+                        <p class="text-gray-700">${word.chinese}</p>
+                        ${word.note ? `<p class="text-sm text-gray-500 italic mt-1">備註: ${word.note}</p>` : ''}
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button data-id="${word.id}" class="delete-mistake-btn text-gray-500 hover:text-red-500 transition-colors p-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                mistakeListDiv.appendChild(mistakeCard);
+            });
+
+            mistakeListDiv.querySelectorAll('.delete-mistake-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                deleteMistake(btn.dataset.id);
+            }));
+        };
+
+        const deleteMistake = (wordId) => {
+            if (confirm('確定要從錯題集中移除此單字嗎？')) {
+                mistakeCollection = mistakeCollection.filter(word => word.id !== wordId);
+                saveData();
+                renderMistakes();
+            }
+        };
+
+        document.getElementById('clear-mistakes-btn').addEventListener('click', () => {
+            if (confirm('確定要清除所有錯題嗎？')) {
+                mistakeCollection = [];
+                saveData();
+                renderMistakes();
+            }
+        });
+
+        document.getElementById('review-mistakes-btn').addEventListener('click', () => {
+            if (mistakeCollection.length === 0) {
+                alert('錯題集中沒有單字可以複習！');
+                return;
+            }
+            // Temporarily set currentLibraryId to null or a special value for mistake review
+            // The spelling review function handles this by checking reviewType
+            currentLibraryId = null; // Indicate we are not in a specific library context
+            startSpellingReview(null, 'mistake');
+        });
+
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            renderLibraries();
+            showPage(PAGES.HOME, '智慧單字複習系統', false);
+        });
+    </script>
+</body>
+</html>
